@@ -1,0 +1,240 @@
+<project name="DBGL" default="dist" basedir=".">
+	<description>
+		Build file for DBGL
+	</description>
+
+	<!-- set global properties for this build -->
+	<property name="src" location="src"/>
+	<property name="javasrc" location="${src}/java"/>
+	<property name="resources" location="${src}/resources"/>
+	<property name="srcdist" location="${src}/dist"/>
+	<property name="build" location="build"/>
+	<property name="dist"  location="dist"/>
+	<property name="lib.dir" location="lib"/>
+	<property name="libtest.dir" location="libtest"/>
+	<property name="libjersey.dir" location="libjersey"/>
+	<property name="user.name" value="Ronald Blankendaal"/>
+	<property name="dosboxversionname" value="DOSBox-0.74"/>
+
+	<loadproperties srcFile="${resources}/version.properties"/>
+
+	<property name="version"            value="${majorversion}.${minorversion}"/>
+	<property name="versionforfilename" value="${majorversion}${minorversion}"/>
+	<property name="dbglfilename" value="dbgl${versionforfilename}"/>
+	<property name="srcfilename"  value= "src${versionforfilename}"/>
+	<property name="javasrcfilename" value="javasrc${versionforfilename}"/>
+	<property name="jarfilename"  value= "jar${versionforfilename}"/>
+
+	<condition property="isMacOS"><os family="mac"/></condition>
+
+
+	<available file="${lib}" type="dir" property="lib.present"/>
+	<target name="setuplib" unless="lib.present">
+		<mkdir dir="${lib.dir}"/>
+		<copy todir="${lib.dir}">
+			<fileset dir="${srcdist}/shared/lib"/>
+			<!-- we need a swt.jar from whatever platform to compile -->
+			<fileset file="${srcdist}/winshared/lib/swtwin32.jar"/>
+		</copy>
+	</target>
+
+	<target name="clean" description="clean up build and dist dirs">
+		<!-- Create the time stamp -->
+		<tstamp/>
+		<!-- Delete the ${build} and ${dist} directory trees -->
+		<delete dir="${build}"/>
+		<delete dir="${dist}"/>
+	</target>
+
+	<target name="cleanutf8" description="clean up utf8 files">
+		<delete>
+			<fileset dir="${resources}/i18n" includes="*.utf8"/>
+		</delete>
+	</target>
+
+	<target name="compile" depends="clean, setuplib" description="compile the source">
+		<!-- Compile the java code from ${src} into ${build} -->
+		<path id="classpath">
+			<fileset dir="${lib.dir}" includes="**/*.jar" excludes="swt*.jar"/>
+		</path>
+		<path id="classpathfull">
+			<fileset dir="${lib.dir}" includes="**/*.jar"/>
+			<fileset dir="${libtest.dir}" includes="**/*.jar"/>
+		</path>
+		<pathconvert property="class-path" dirsep="/" pathsep=" " refid="classpath">
+			<map from="${lib.dir}" to="lib"/>
+		</pathconvert>
+		<mkdir dir="${build}"/>
+		<javac includeantruntime="false" debug="off" srcdir="${javasrc}" destdir="${build}" classpathref="classpathfull" target="1.7" source="1.7"/>
+	</target>
+
+	<target name="jar" depends="compile" description="create main jar">
+		<copy todir="${build}">
+			<fileset dir="${resources}" excludes="**/*.utf8"/>
+		</copy>
+		<java fork="yes" classname="org.dbgl.preprocess.CompactResourceBundles">
+			<arg value="${build}/i18n"/>
+			<classpath>
+				<pathelement path="${build}"/>
+				<pathelement path="${lib.dir}/*"/>
+ 			</classpath>
+		</java>
+		<mkdir dir="${dist}"/>
+		<jar jarfile="${dist}/dbgl.jar" basedir="${build}" excludes="**/test/**, **/preprocess/**" level="9">
+			<manifest>
+				<attribute name="Built-By" value="${user.name}"/>
+				<section name="common">
+					<attribute name="Specification-Title" value="DBGL"/>
+					<attribute name="Specification-Version" value="${version}"/>
+					<attribute name="Specification-Vendor" value="${user.name}"/>
+					<attribute name="Implementation-Title" value="common"/>
+					<attribute name="Implementation-Version" value="${version} ${TODAY}"/>
+					<attribute name="Implementation-Vendor" value="${user.name}"/>
+				</section>
+				<attribute name="Class-Path" value="${class-path} ./"/>
+				<attribute name="Main-Class" value="org.dbgl.gui.Launcher"/>
+			</manifest>
+		</jar>
+	</target>
+
+	<target name="distwindows" depends="jar" description="generate the distribution for windows" >
+		<mkdir dir="${dist}/win"/>
+		<copy todir="${dist}/win">
+			<fileset dir="${srcdist}/shared"/>
+			<fileset file="${dist}/dbgl.jar"/>
+			<fileset dir="${srcdist}/winshared"/>
+		</copy>
+		<zip destfile="${dist}/${dbglfilename}.zip" basedir="${dist}/win" level="9"/>
+		<delete dir="${dist}/win"/>
+	</target>
+
+	<target name="distlinux" depends="jar" description="generate the distribution for linux" >
+		<mkdir dir="${dist}/linux32"/>
+		<mkdir dir="${dist}/linux64"/>
+		<mkdir dir="${dist}/linuxgeneric"/>
+		<copy todir="${dist}/linux32">
+			<fileset dir="${srcdist}/shared"/>
+			<fileset file="${dist}/dbgl.jar"/>
+			<fileset dir="${srcdist}/linuxshared"/>
+			<fileset dir="${srcdist}/linux32"/>
+		</copy>
+		<copy todir="${dist}/linux64">
+			<fileset dir="${srcdist}/shared"/>
+			<fileset file="${dist}/dbgl.jar"/>
+			<fileset dir="${srcdist}/linuxshared"/>
+			<fileset dir="${srcdist}/linux64"/>
+		</copy>
+		<copy todir="${dist}/linuxgeneric">
+			<fileset dir="${srcdist}/shared"/>
+			<fileset file="${dist}/dbgl.jar"/>
+			<fileset dir="${srcdist}/linuxshared">
+				<exclude name="dbgl"/>
+				<exclude name="${dosboxversionname}/"/>
+			</fileset>
+			<fileset dir="${srcdist}/linuxgeneric"/>
+		</copy>
+		<fixcrlf srcdir="${dist}/linux32/templates" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linux32/xsl" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linux32" includes="COPYING" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linux64/templates" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linux64/xsl" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linux64" includes="COPYING" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linuxgeneric/templates" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linuxgeneric/xsl" eol="unix"/>
+		<fixcrlf srcdir="${dist}/linuxgeneric" includes="COPYING" eol="unix"/>
+		<tar destfile="${dist}/${dbglfilename}.tar.gz" compression="gzip">
+			<tarfileset dir="${dist}/linux32" mode="755">
+			    <include name="dbgl"/>
+				<include name="${dosboxversionname}/dosbox"/>
+			</tarfileset>
+			<tarfileset dir="${dist}/linux32">
+			    <exclude name="dbgl"/>
+				<exclude name="${dosboxversionname}/dosbox"/>
+			</tarfileset>
+		</tar>
+		<tar destfile="${dist}/${dbglfilename}_64bit.tar.gz" compression="gzip">
+			<tarfileset dir="${dist}/linux64" mode="755">
+			    <include name="dbgl"/>
+				<include name="${dosboxversionname}/dosbox"/>
+			</tarfileset>
+			<tarfileset dir="${dist}/linux64">
+			    <exclude name="dbgl"/>
+				<exclude name="${dosboxversionname}/dosbox"/>
+			</tarfileset>
+		</tar>
+		<tar destfile="${dist}/${dbglfilename}_generic.tar.gz" compression="gzip">
+			<tarfileset dir="${dist}/linuxgeneric" mode="755">
+			    <include name="dbgl"/>
+			</tarfileset>
+			<tarfileset dir="${dist}/linuxgeneric">
+			    <exclude name="dbgl"/>
+			</tarfileset>
+		</tar>
+		<delete dir="${dist}/linux32"/>
+		<delete dir="${dist}/linux64"/>
+		<delete dir="${dist}/linuxgeneric"/>
+	</target>
+
+	<target name="distmac" if="isMacOS" depends="jar" description="generate the distribution for mac">
+		<mkdir dir="${dist}/mac/${dbglfilename}"/>
+		<copy todir="${dist}/mac/${dbglfilename}">
+			<fileset dir="${srcdist}/macshared"/>
+		</copy>
+		<copy todir="${dist}/mac/${dbglfilename}/DBGL.app/Contents/MacOS">
+			<fileset dir="${srcdist}/shared"/>
+			<fileset file="${dist}/dbgl.jar"/>
+		</copy>	
+		<fixcrlf srcdir="${dist}/mac/${dbglfilename}/DBGL.app/Contents/MacOS/templates" eol="mac"/>
+		<fixcrlf srcdir="${dist}/mac/${dbglfilename}/DBGL.app/Contents/MacOS/xsl" eol="mac"/>
+		<fixcrlf srcdir="${dist}/mac/${dbglfilename}/DBGL.app/Contents/MacOS" includes="COPYING" eol="mac"/>
+		<replace file="${dist}/mac/${dbglfilename}/DBGL.app/Contents/Info.plist" token="@@version@@" value="${version}"/>
+		<symlink link="${dist}/mac/${dbglfilename}/DBGL.app/Contents/MacOS/${dosboxversionname}" resource="../Resources/DOSBox.app/Contents/MacOS"/>
+		<chmod file="${dist}/mac/${dbglfilename}/DBGL.app/Contents/MacOS/dbgl" perm="755"/>
+		<chmod file="${dist}/mac/${dbglfilename}/DBGL.app/Contents/MacOS/${dosboxversionname}/DOSBox" perm="755"/>
+		<exec executable="hdiutil">
+			<arg line="create -format UDBZ -srcfolder ${dist}/mac/${dbglfilename} ${dist}/${dbglfilename}.dmg"/>
+		</exec>
+		<delete dir="${dist}/mac"/>
+	</target>
+
+	<target name="distsrc" depends="jar" description="generate src packages">
+		<zip destfile="${dist}/${srcfilename}.zip" level="9">
+			<zipfileset dir="${src}" prefix="src/"/>
+			<zipfileset dir="${libtest.dir}" prefix="libtest/"/>
+			<zipfileset file="build.xml"/>
+		</zip>
+		<zip destfile="${dist}/${javasrcfilename}.zip" level="9">
+			<zipfileset dir="${javasrc}" prefix="src/java/"/>
+		</zip>
+		<zip destfile="${dist}/${jarfilename}.zip" level="9">
+			<fileset file="${dist}/dbgl.jar"/>
+		</zip>
+		<delete file="${dist}/dbgl.jar"/>
+		<delete dir="${build}"/>
+	</target>
+
+	<target name="dist" description="generate the distribution for all platforms" depends="distwindows, distlinux, distmac, distsrc"/>
+
+	<target name="utf8-to-unicode" description="convert all .utf8 language files to escaped unicode .properties files">
+		<native2ascii encoding="utf-8" src="${resources}/i18n" dest="${resources}/i18n" includes="*.utf8" ext=".properties"/>
+	</target>
+	<target name="unicode-to-utf8" description="convert all escaped unicode .properties language files to .utf8 files">
+		<native2ascii encoding="utf-8" src="${resources}/i18n" dest="${resources}/i18n" includes="*.properties" ext=".utf8" reverse="true"/>
+	</target>
+
+	<target name="disti18n" depends="dist, unicode-to-utf8" description="generate i18n package">
+		<zip destfile="${dist}/i18n.zip" level="9">
+			<zipfileset dir="${resources}" prefix="plugins">
+				<include name="**/*.properties"/>
+				<include name="**/*.utf8"/>
+			</zipfileset>
+		</zip>
+		<antcall target="cleanutf8"/>
+	</target>
+
+	<target name="jersey" description="generate fat jersey jar by combining several jersey jar components">
+		<jar destfile="${lib.dir}/jersey-2.13.jar" filesetmanifest="merge">
+		    <zipgroupfileset dir="${libjersey.dir}" includes="*.jar"/>
+		</jar>
+	</target>
+</project>

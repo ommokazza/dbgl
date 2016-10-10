@@ -1,0 +1,7 @@
+#!/bin/sh
+BASEDIR=`dirname "$0"`
+cd "$BASEDIR"
+exec java \
+  -XstartOnFirstThread \
+  -classpath "$BASEDIR"/lib:"$BASEDIR" \
+  -jar dbgl.jar
